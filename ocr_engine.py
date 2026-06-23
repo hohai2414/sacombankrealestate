@@ -1,21 +1,30 @@
 import cv2
 import numpy as np
-import easyocr
 import re
 import os
 from PIL import Image
 
-# Initialize the EasyOCR reader. 
-# We use Vietnamese ('vi') and English ('en') to better support alphanumeric sequences.
-# This will download the models on the first call.
-_reader = None
+# Initialize the PaddleOCR reader lazily to prevent server crashes 
+# if the system lacks Visual C++ redistributables at startup.
+_ocr = None
 
-def get_reader():
-    global _reader
-    if _reader is None:
-        # EasyOCR reader initialization
-        _reader = easyocr.Reader(['vi', 'en'], gpu=False) # default to CPU for portability
-    return _reader
+def get_ocr():
+    global _ocr
+    if _ocr is None:
+        try:
+            print("Lazy importing PaddleOCR...")
+            from paddleocr import PaddleOCR
+            # Initialize PaddleOCR with CPU and orientation classifier
+            _ocr = PaddleOCR(use_textline_orientation=True, lang='vi', device='cpu')
+        except ImportError as e:
+            if "libpaddle" in str(e) or "DLL load failed" in str(e):
+                raise ImportError(
+                    "Không thể tải thư viện PaddleOCR. Vấn đề thường do thiếu Microsoft Visual C++ Redistributable trên hệ thống Windows của bạn.\n"
+                    "Vui lòng tải và cài đặt VC++ Redistributable tại link chính thức của Microsoft: https://aka.ms/vs/17/release/vc_redist.x64.exe\n"
+                    "Sau khi cài đặt xong, hãy khởi động lại ứng dụng."
+                ) from e
+            raise e
+    return _ocr
 
 def rotate_image(image, angle):
     """Rotate image by 90, 180, or 270 degrees."""
@@ -65,9 +74,9 @@ def detect_correct_rotation(img):
     Run OCR on a resized version of the image at 0, 90, 180, 270 degrees.
     Select the angle that contains the most Vietnamese keywords.
     """
-    reader = get_reader()
+    ocr = get_ocr()
     
-    # Common Vietnamese keywords on Land Certificates (lowercase, no accents for safety or with accents)
+    # Common Vietnamese keywords on Land Certificates
     keywords = [
         "giấy chứng nhận", "quyền sử dụng", "sử dụng đất", "thửa đất", "địa chỉ", 
         "diện tích", "mục đích", "sử dụng", "chủ sở hữu", "nhà ở", "tài sản"
@@ -84,20 +93,19 @@ def detect_correct_rotation(img):
 
     best_angle = 0
     max_matches = -1
-    best_results = []
 
     # Check rotations: 0, 90, 180, 270
-    # To optimize speed, we check 0 degrees first. If it yields a high match count, we accept it.
     for angle in [0, 90, 180, 270]:
         rotated = rotate_image(resized, angle)
         
         # Run OCR
-        # easyocr readtext returns list of (bbox, text, confidence)
-        results = reader.readtext(rotated, paragraph=True)
+        results = ocr.ocr(rotated, cls=True)
         
         # Count keyword matches
         matches = 0
-        joined_text = " ".join([res[1].lower() for res in results])
+        joined_text = ""
+        if results and results[0]:
+            joined_text = " ".join([line[1][0].lower() for line in results[0] if line and len(line) >= 2])
         
         for kw in keywords:
             if kw in joined_text:
@@ -105,18 +113,18 @@ def detect_correct_rotation(img):
                 
         # If we have a very clear match on 0 degrees (e.g. >= 4 keywords), we can skip other rotations
         if angle == 0 and matches >= 4:
-            return 0, reader.readtext(img, paragraph=False)
+            full_results = ocr.ocr(img, cls=True)
+            return 0, full_results[0] if full_results else []
             
         if matches > max_matches:
             max_matches = matches
             best_angle = angle
-            best_results = results # Keep low-res results just in case, but we will rerun on full-res
 
     # Rerun OCR on full resolution image with the best rotation
     best_rotated_full = rotate_image(img, best_angle)
-    full_results = reader.readtext(best_rotated_full, paragraph=False)
+    full_results = ocr.ocr(best_rotated_full, cls=True)
     
-    return best_angle, full_results
+    return best_angle, full_results[0] if full_results else []
 
 def parse_extracted_data(ocr_results):
     """
@@ -130,17 +138,17 @@ def parse_extracted_data(ocr_results):
     marks it as uncertain.
     """
     # Join text lines for parsing, but keep line order
-    # ocr_results: list of [ [box], text, confidence ]
+    # ocr_results: list of [ [[x1,y1],...], (text, conf) ] from PaddleOCR
     lines = []
     min_confidence = 1.0
-    confidences = {}
     
     for item in ocr_results:
-        text = item[1].strip()
-        conf = item[2]
-        lines.append((text, conf))
-        if conf < min_confidence:
-            min_confidence = conf
+        if item and len(item) >= 2 and isinstance(item[1], (list, tuple)):
+            text = item[1][0].strip()
+            conf = item[1][1]
+            lines.append((text, conf))
+            if conf < min_confidence:
+                min_confidence = conf
 
     full_text = "\n".join([line[0] for line in lines])
     
@@ -292,11 +300,11 @@ def parse_extracted_data(ocr_results):
         "raw_text": full_text
     }
 
-def process_certificate_image(image_path, preprocessed_output_path=None):
+def process_certificate_image(image_path, preprocessed_output_path=None, manual_rotation=None):
     """
     High-level function:
     1. Preprocess image (denoise, contrast, sharpen)
-    2. Detect rotation and run OCR
+    2. Detect/apply rotation and run OCR
     3. Parse information
     Returns: dict of extracted fields, rotation angle, and status.
     """
@@ -304,11 +312,19 @@ def process_certificate_image(image_path, preprocessed_output_path=None):
         # Preprocess
         original_img, preprocessed_img = preprocess_image_for_ocr(image_path, preprocessed_output_path)
         
-        # Detect rotation and run OCR on the rotated image
-        rotation_angle, ocr_results = detect_correct_rotation(original_img)
-        
-        # If best angle is not 0, we should save the rotated preprocessed image for display
-        if rotation_angle != 0 and preprocessed_output_path:
+        # If manual_rotation is specified, we bypass auto detection and use it
+        if manual_rotation is not None and manual_rotation in [0, 90, 180, 270]:
+            rotation_angle = manual_rotation
+            ocr = get_ocr()
+            best_rotated_full = rotate_image(original_img, rotation_angle)
+            full_results = ocr.ocr(best_rotated_full, cls=True)
+            ocr_results = full_results[0] if full_results else []
+        else:
+            # Detect rotation automatically
+            rotation_angle, ocr_results = detect_correct_rotation(original_img)
+            
+        # Save preprocessed/rotated image for display
+        if preprocessed_output_path:
             rotated_preprocessed = rotate_image(preprocessed_img, rotation_angle)
             cv2.imwrite(preprocessed_output_path, rotated_preprocessed)
             

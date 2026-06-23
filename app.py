@@ -53,6 +53,67 @@ def upload_processed():
         "preprocessed_url": f"/static/preprocessed/{filename}"
     })
 
+@app.route('/run_ocr', methods=['POST'])
+def run_ocr():
+    """
+    Receives an uploaded image, saves it to the upload folder,
+    preprocesses it, runs PaddleOCR, and returns the extracted fields.
+    """
+    if 'file' not in request.files:
+        return jsonify({"status": "error", "message": "Không tìm thấy file"}), 400
+        
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"status": "error", "message": "Tên file rỗng"}), 400
+        
+    # Get rotation parameter (default to None so it does auto-detection, unless user manually rotated)
+    rotation = request.form.get('rotation')
+    manual_rotation = None
+    if rotation is not None:
+        try:
+            manual_rotation = int(rotation)
+        except ValueError:
+            manual_rotation = None
+            
+    # Save original file
+    unique_id = str(uuid.uuid4())
+    original_filename = secure_filename(file.filename)
+    original_path = os.path.join(app.config['UPLOAD_FOLDER'], f"orig_{unique_id}_{original_filename}")
+    file.save(original_path)
+    
+    # Define paths for preprocessed image
+    preprocessed_filename = f"proc_{unique_id}_{original_filename}"
+    preprocessed_path = os.path.join(app.config['PREPROCESSED_FOLDER'], preprocessed_filename)
+    preprocessed_url = f"/static/preprocessed/{preprocessed_filename}"
+    
+    try:
+        from ocr_engine import process_certificate_image
+        # Run backend PaddleOCR
+        result = process_certificate_image(original_path, preprocessed_path, manual_rotation)
+        
+        if result.get("status") == "error":
+            return jsonify({
+                "status": "error",
+                "message": result.get("error_msg", "Lỗi OCR chưa xác định")
+            }), 500
+            
+        # Return the parsed fields and preprocessed URL
+        return jsonify({
+            "status": "success",
+            "preprocessed_url": preprocessed_url,
+            "data": {
+                "owner": result.get("owner", ""),
+                "address": result.get("address", ""),
+                "area": result.get("area", ""),
+                "purpose": result.get("purpose", ""),
+                "uncertain": result.get("uncertain", {})
+            }
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": f"Lỗi xử lý OCR: {str(e)}"}), 500
+
 @app.route('/export', methods=['POST'])
 def export_excel():
     try:
