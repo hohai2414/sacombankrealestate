@@ -41,11 +41,6 @@ function initUploadEvents() {
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
 
-    // Click drop-zone to trigger hidden file selection
-    dropZone.addEventListener('click', () => {
-        fileInput.click();
-    });
-
     fileInput.addEventListener('change', (e) => {
         handleFiles(e.target.files);
         fileInput.value = ''; // reset
@@ -530,7 +525,7 @@ function parseOwner(text) {
     }
     
     // Fallback search in entire text for capitalized word sequences after Ông/Bà
-    const regex = /\b(?:Ông|Bà)\s+([A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝ][a-zàáâãèéêìíòóôõùúýăđĩũơưăạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵý]*+(?:\s+[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝ][a-zàáâãèéêìíòóôõùúýăđĩũơưăạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵý]*+)+)/g;
+    const regex = /\b(?:Ông|Bà)\s+([A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝ][a-zàáâãèéêìíòóôõùúýăđĩũơưăạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵý]*(?:\s+[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝ][a-zàáâãèéêìíòóôõùúýăđĩũơưăạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵý]*)+)/g;
     const matches = text.match(regex);
     if (matches) {
         const cleanedMatches = matches.map(m => m.replace(/^(Ông|Bà)\s+/i, '').trim());

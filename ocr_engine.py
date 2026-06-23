@@ -64,7 +64,9 @@ def preprocess_image_for_ocr(image_path, output_preprocessed_path=None):
     processed_bgr = cv2.cvtColor(sharpened, cv2.COLOR_GRAY2BGR)
 
     if output_preprocessed_path:
-        os.makedirs(os.path.dirname(output_preprocessed_path), exist_ok=True)
+        dir_name = os.path.dirname(output_preprocessed_path)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
         cv2.imwrite(output_preprocessed_path, processed_bgr)
 
     return img, processed_bgr
@@ -196,7 +198,7 @@ def parse_extracted_data(ocr_results):
     else:
         # Fallback regex search in the entire text
         # Look for "Ông" or "Bà" followed by capitalized words
-        matches = re.findall(r'\b(?:Ông|Bà)\s+([A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝ][a-zàáâãèéêìíòóôõùúýăđĩũơưăạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵý]*+(?:\s+[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝ][a-zàáâãèéêìíòóôõùúýăđĩũơưăạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵý]*+)+)', full_text)
+        matches = re.findall(r'\b(?:Ông|Bà)\s+([A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝ][a-zàáâãèéêìíòóôõùúýăđĩũơưăạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵý]*(?:\s+[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝ][a-zàáâãèéêìíòóôõùúýăđĩũơưăạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵý]*)+)', full_text)
         if matches:
             owner = "; ".join(list(dict.fromkeys(matches)))
 
