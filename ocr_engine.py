@@ -107,7 +107,11 @@ def detect_correct_rotation(img):
         matches = 0
         joined_text = ""
         if results and results[0]:
-            joined_text = " ".join([line[1][0].lower() for line in results[0] if line and len(line) >= 2])
+            res = results[0]
+            if isinstance(res, dict):
+                joined_text = " ".join([t.lower() for t in res.get('rec_texts', [])])
+            else:
+                joined_text = " ".join([line[1][0].lower() for line in res if line and len(line) >= 2])
         
         for kw in keywords:
             if kw in joined_text:
@@ -115,7 +119,7 @@ def detect_correct_rotation(img):
                 
         # If we have a very clear match on 0 degrees (e.g. >= 4 keywords), we can skip other rotations
         if angle == 0 and matches >= 4:
-            full_results = ocr.ocr(img, cls=True)
+            full_results = ocr.ocr(img)
             return 0, full_results[0] if full_results else []
             
         if matches > max_matches:
@@ -124,7 +128,7 @@ def detect_correct_rotation(img):
 
     # Rerun OCR on full resolution image with the best rotation
     best_rotated_full = rotate_image(img, best_angle)
-    full_results = ocr.ocr(best_rotated_full, cls=True)
+    full_results = ocr.ocr(best_rotated_full)
     
     return best_angle, full_results[0] if full_results else []
 
@@ -144,13 +148,21 @@ def parse_extracted_data(ocr_results):
     lines = []
     min_confidence = 1.0
     
-    for item in ocr_results:
-        if item and len(item) >= 2 and isinstance(item[1], (list, tuple)):
-            text = item[1][0].strip()
-            conf = item[1][1]
-            lines.append((text, conf))
+    if isinstance(ocr_results, dict):
+        texts = ocr_results.get('rec_texts', [])
+        scores = ocr_results.get('rec_scores', [])
+        for text, conf in zip(texts, scores):
+            lines.append((text.strip(), conf))
             if conf < min_confidence:
                 min_confidence = conf
+    else:
+        for item in ocr_results:
+            if item and len(item) >= 2 and isinstance(item[1], (list, tuple)):
+                text = item[1][0].strip()
+                conf = item[1][1]
+                lines.append((text, conf))
+                if conf < min_confidence:
+                    min_confidence = conf
 
     full_text = "\n".join([line[0] for line in lines])
     
@@ -180,10 +192,11 @@ def parse_extracted_data(ocr_results):
                 break
             
             # Filter lines that look like owners
-            # Check prefixes
-            prefix_match = re.match(r'^(?:ông|bà|hộ\s+ông|hộ\s+bà|công\s+ty|tổ\s+chức|dn|tổng\s+công\s+ty|dntn)\b[:\-\s]*(.*)', text, re.IGNORECASE)
+            # Check prefixes anywhere on the line
+            prefix_match = re.search(r'(?:họ\s+và\s+tên|chủ\s+hộ|ông|bà|hộ\s+ông|hộ\s+bà|công\s+ty)\b[:\-\s]*(.*)', text, re.IGNORECASE)
             if prefix_match:
                 owner_name = prefix_match.group(1).strip()
+                owner_name = re.sub(r'^(?:ông|bà)\s+', '', owner_name, flags=re.IGNORECASE)
                 # Clean up name (remove date of birth, identity card numbers if included in the same line)
                 owner_name = re.split(r'[,;]|\bsinh\b|\bnăm\b|\bcmnd\b|\bcccd\b|\bđịa\b', owner_name, flags=re.IGNORECASE)[0].strip()
                 if len(owner_name) > 3:
@@ -197,14 +210,14 @@ def parse_extracted_data(ocr_results):
         owner = "; ".join(list(dict.fromkeys(owner_lines))) # Remove duplicates preserving order
     else:
         # Fallback regex search in the entire text
-        # Look for "Ông" or "Bà" followed by capitalized words
-        matches = re.findall(r'\b(?:Ông|Bà)\s+([A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝ][a-zàáâãèéêìíòóôõùúýăđĩũơưăạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵý]*(?:\s+[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝ][a-zàáâãèéêìíòóôõùúýăđĩũơưăạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵý]*)+)', full_text)
+        # Look for "Ông" or "Bà" followed by capitalized words (horizontal spaces only)
+        matches = re.findall(r'\b(?:Ông|Bà)[ \t]+([A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝ][a-zàáâãèéêìíòóôõùúýăđĩũơưăạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵý]*(?:[ \t]+[A-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴÝ][a-zàáâãèéêìíòóôõùúýăđĩũơưăạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵý]*)+)', full_text)
         if matches:
             owner = "; ".join(list(dict.fromkeys(matches)))
 
     # 2. Extract Address (Địa chỉ)
-    # Look for "Địa chỉ thửa đất:" or "Địa chỉ:" or "Nơi thường trú:"
-    address_match = re.search(r'(?:địa\s+chỉ(?:\s+thửa\s+đất)?|nơi\s+tọa\s+lạc)[:\-\s]*([^\n]+)', full_text, re.IGNORECASE)
+    # Look for "Địa chỉ thửa đất:" or "Địa chỉ:" or "Nơi thường trú:" with accent-agnostic variations
+    address_match = re.search(r'(?:địa\s+chỉ|dia\s+chi|đia\s+chi|địa\s+chi|nơi\s+tọa\s+lạc|noi\s+toa\s+lac)[:\-\s]*([^\n]+)', full_text, re.IGNORECASE)
     if address_match:
         address = address_match.group(1).strip()
     else:
@@ -212,8 +225,8 @@ def parse_extracted_data(ocr_results):
         for text, conf in lines:
             text_lower = text.lower()
             if any(kw in text_lower for kw in ["xã ", "phường ", "thị trấn ", "huyện ", "quận ", "tỉnh ", "thành phố "]) and len(text) > 15:
-                # Exclude owner section permanent address if already matched
-                if not any(kw in text_lower for kw in ["thường trú", "nơi cư trú", "đăng ký"]):
+                # Exclude owner section permanent address if already matched, and exclude "xã hội" (country title)
+                if "xã hội" not in text_lower and not any(kw in text_lower for kw in ["thường trú", "nơi cư trú", "đăng ký"]):
                     address = text.strip()
                     break
         if not address:
@@ -226,7 +239,7 @@ def parse_extracted_data(ocr_results):
     if address:
         address = re.sub(r'^(?:thửa đất|đất|nhà ở|tại|ở)\s*', '', address, flags=re.IGNORECASE)
         # Remove trailing punctuation or fields like "Hình thức sử dụng" if appended
-        address = re.split(r'[,;]|\bhình\b|\bmục\b|\bdiện\b', address, flags=re.IGNORECASE)[0].strip()
+        address = re.split(r'[;]|\bhình\b|\bmục\b|\bdiện\b', address, flags=re.IGNORECASE)[0].strip()
 
     # 3. Extract Area (Diện tích)
     # Look for "Diện tích: 71,5 m2" or "a) Diện tích: 71,5 m²"
@@ -243,13 +256,30 @@ def parse_extracted_data(ocr_results):
                 break
 
     # 4. Extract Purpose (Mục đích sử dụng đất)
-    # Look for "Mục đích sử dụng: Đất ở tại nông thôn" or "c) Mục đích sử dụng: ..."
-    purpose_match = re.search(r'(?:mục\s+đích(?:\s+sử\s+dụng)?(?:\s+đất)?|sử\s+dụng\s+vào\s+mục\s+đích)[:\-\s]*([^\n]+)', full_text, re.IGNORECASE)
-    if purpose_match:
-        purpose = purpose_match.group(1).strip()
-    else:
-        # Fallback: look for common land purposes
-        common_purposes = ["đất ở tại nông thôn", "đất ở tại đô thị", "đất trồng cây lâu năm", "đất trồng cây hàng năm", "đất nuôi trồng thủy sản", "đất rừng sản xuất", "đất thương mại, dịch vụ"]
+    # Check land use codes map first since they are highly reliable in parenthesis
+    land_code_map = {
+        "ONT": "Đất ở tại nông thôn",
+        "ODT": "Đất ở tại đô thị",
+        "CLN": "Đất trồng cây lâu năm",
+        "HNK": "Đất trồng cây hàng năm khác",
+        "NTS": "Đất nuôi trồng thủy sản",
+        "RSX": "Đất rừng sản xuất",
+        "LUC": "Đất trồng lúa nước",
+        "TMD": "Đất thương mại, dịch vụ"
+    }
+    for code, full_name in land_code_map.items():
+        if re.search(r'\b' + code + r'\b', full_text):
+            purpose = full_name
+            break
+            
+    if not purpose:
+        # Look for "Mục đích sử dụng: Đất ở tại nông thôn" or "c) Mục đích sử dụng: ..."
+        purpose_match = re.search(r'(?:mục\s+đích|muc\s+dich|mc\s+đích|mc\s+dich|sử\s+dụng\s+vào\s+mục\s+đích)[:\-\s]*([^\n]+)', full_text, re.IGNORECASE)
+        if purpose_match:
+            purpose = purpose_match.group(1).strip()
+        else:
+            # Fallback: look for common land purposes
+            common_purposes = ["đất ở tại nông thôn", "đất ở tại đô thị", "đất trồng cây lâu năm", "đất trồng cây hàng năm", "đất nuôi trồng thủy sản", "đất rừng sản xuất", "đất thương mại, dịch vụ"]
         for text, conf in lines:
             text_lower = text.lower()
             for cp in common_purposes:

@@ -573,7 +573,7 @@ function parseAddress(text) {
     
     if (address) {
         address = address.replace(/^(?:thửa đất|đất|nhà ở|tại|ở)\s*/i, '').trim();
-        address = address.split(/[,;]|\bhình\b|\bmục\b|\bdiện\b/i)[0].trim();
+        address = address.split(/[;]|\bhình\b|\bmục\b|\bdiện\b/i)[0].trim();
     }
     return address;
 }
