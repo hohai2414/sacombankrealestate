@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2.4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2.5">
 </head>
 <body>
     <header class="app-header">
@@ -60,7 +60,7 @@
                     <p class="upload-text">Kéo thả ảnh vào đây hoặc <span>chọn file</span></p>
                     <span class="upload-hint">JPG, PNG, WEBP. Cho phép chọn nhiều ảnh cùng lúc.</span>
                 </div>
-                <input type="file" id="file-input" multiple accept="image/*" style="position: absolute; top: -999px; width: 0; height: 0; opacity: 0; overflow: hidden; pointer-events: none;">
+                <input type="file" id="file-input" multiple accept="image/*" style="position: absolute; top: -999px; left: -999px; width: 1px; height: 1px; opacity: 0; overflow: hidden;">
 
 
                 <div class="panel-header" style="margin-top: 1.75rem;">
@@ -161,6 +161,6 @@
     <!-- Notification Toast -->
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=2.4"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=2.5"></script>
 </body>
 </html>
