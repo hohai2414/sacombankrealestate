@@ -15,7 +15,7 @@ def get_ocr():
             print("Lazy importing PaddleOCR...")
             from paddleocr import PaddleOCR
             # Initialize PaddleOCR with CPU and orientation classifier
-            _ocr = PaddleOCR(use_textline_orientation=True, lang='vi', device='cpu')
+            _ocr = PaddleOCR(use_textline_orientation=True, lang='vi', device='cpu', enable_mkldnn=False)
         except ImportError as e:
             if "libpaddle" in str(e) or "DLL load failed" in str(e):
                 raise ImportError(
@@ -101,7 +101,7 @@ def detect_correct_rotation(img):
         rotated = rotate_image(resized, angle)
         
         # Run OCR
-        results = ocr.ocr(rotated, cls=True)
+        results = ocr.ocr(rotated)
         
         # Count keyword matches
         matches = 0
@@ -319,7 +319,7 @@ def process_certificate_image(image_path, preprocessed_output_path=None, manual_
             rotation_angle = manual_rotation
             ocr = get_ocr()
             best_rotated_full = rotate_image(original_img, rotation_angle)
-            full_results = ocr.ocr(best_rotated_full, cls=True)
+            full_results = ocr.ocr(best_rotated_full)
             ocr_results = full_results[0] if full_results else []
         else:
             # Detect rotation automatically
