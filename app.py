@@ -17,6 +17,18 @@ os.makedirs(app.config['PREPROCESSED_FOLDER'], exist_ok=True)
 def index():
     return render_template('index.html')
 
+@app.route('/static/tessdata/<path:filename>')
+def serve_tessdata(filename):
+    file_path = os.path.join(os.path.dirname(__file__), 'static', 'tessdata', filename)
+    if not os.path.exists(file_path):
+        return "Không tìm thấy file", 404
+        
+    # We set mimetype explicitly and remove Content-Encoding so browser does not decompress it
+    response = send_file(file_path, mimetype='application/x-gzip' if filename.endswith('.gz') else 'application/octet-stream')
+    response.headers.pop('Content-Encoding', None)
+    return response
+
+
 @app.route('/upload_processed', methods=['POST'])
 def upload_processed():
     """

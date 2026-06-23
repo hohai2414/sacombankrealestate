@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=2.2">
 </head>
 <body>
     <header class="app-header">
@@ -19,7 +19,7 @@
                     <!-- Sacombank inspired logo shape: solid blue with golden touch -->
                     <path d="M12 2L2 9L12 16L22 9L12 2Z" fill="#0065a4"/>
                     <path d="M2 17L12 22L22 17" stroke="#D7A44C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M2 13L12 18L22 13" stroke="#00AEEF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M2 13L18 18L22 13" stroke="#00AEEF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
                 <span>Sacombank <strong>Estate OCR</strong></span>
             </div>
@@ -50,7 +50,6 @@
                 </div>
                 
                 <div class="upload-zone" id="drop-zone">
-                    <input type="file" id="file-input" multiple accept="image/*" class="file-input-hidden">
                     <div class="upload-icon">
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -61,6 +60,8 @@
                     <p class="upload-text">Kéo thả ảnh vào đây hoặc <span>chọn file</span></p>
                     <span class="upload-hint">JPG, PNG, WEBP. Cho phép chọn nhiều ảnh cùng lúc.</span>
                 </div>
+                <input type="file" id="file-input" multiple accept="image/*" style="display: none;">
+
 
                 <div class="panel-header" style="margin-top: 1.75rem;">
                     <h2>Danh sách ảnh tài liệu</h2>
@@ -161,6 +162,6 @@
     <div class="toast-container" id="toast-container"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.3/dist/tesseract.min.js"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=2.2"></script>
 </body>
 </html>

@@ -1,6 +1,8 @@
 // State Management
 let activeImages = {}; // stores metadata for each image item: file, rotation, canvas, status
 let tesseractWorker = null;
+let ocrQueue = [];
+let isQueueProcessing = false;
 
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
@@ -55,12 +57,9 @@ function initUploadEvents() {
     const dropZone = document.getElementById('drop-zone');
     const fileInput = document.getElementById('file-input');
 
-    // Safe click forwarding: Click anywhere inside the drop-zone (including labels/icons) 
-    // triggers the hidden file input click, but ONLY if we didn't click the input directly.
-    dropZone.addEventListener('click', (e) => {
-        if (e.target !== fileInput) {
-            fileInput.click();
-        }
+    // Click drop-zone to trigger hidden file selection
+    dropZone.addEventListener('click', () => {
+        fileInput.click();
     });
 
     fileInput.addEventListener('change', (e) => {
@@ -169,6 +168,13 @@ function createImageQueueItem(file) {
     itemEl.querySelector('.btn-delete-image').addEventListener('click', (e) => {
         e.stopPropagation();
         itemEl.remove();
+        
+        // Remove from queue if present
+        const qIndex = ocrQueue.indexOf(itemId);
+        if (qIndex > -1) {
+            ocrQueue.splice(qIndex, 1);
+        }
+        
         delete activeImages[itemId];
         
         // Remove associated row in the table if it exists
@@ -187,21 +193,44 @@ function createImageQueueItem(file) {
     // Handle rotate sidebar item
     itemEl.querySelector('.btn-rotate-image').addEventListener('click', (e) => {
         e.stopPropagation();
-        if (activeImages[itemId].status === 'processing') {
+        if (activeImages[itemId].status === 'processing' || ocrQueue.includes(itemId)) {
             showToast("Đang chạy OCR, vui lòng đợi xong lượt này rồi xoay!", "warning");
             return;
         }
         
         // Rotate 90 degrees
         activeImages[itemId].rotation = (activeImages[itemId].rotation + 90) % 360;
-        showToast(`Đã xoay ảnh 90°. Đang nhận dạng lại...`, 'info');
-        runOCRProcess(itemId);
+        showToast(`Đã xoay ảnh 90°. Đang chờ nhận dạng lại...`, 'info');
+        ocrQueue.push(itemId);
+        processOcrQueue();
     });
 
     imageList.appendChild(itemEl);
 
-    // Start OCR
-    runOCRProcess(itemId);
+    // Push to processing queue
+    ocrQueue.push(itemId);
+    processOcrQueue();
+}
+
+// Queue loop processor to handle OCR sequentially
+async function processOcrQueue() {
+    if (isQueueProcessing) return;
+    if (ocrQueue.length === 0) {
+        isQueueProcessing = false;
+        return;
+    }
+
+    isQueueProcessing = true;
+    const itemId = ocrQueue.shift();
+
+    try {
+        await runOCRProcess(itemId);
+    } catch (err) {
+        console.error("Queue process error for item:", itemId, err);
+    } finally {
+        isQueueProcessing = false;
+        setTimeout(processOcrQueue, 50);
+    }
 }
 
 // Current active image item ID running OCR (to update progress bar in UI)
@@ -219,101 +248,108 @@ function updateOCRProgress(progress) {
     }
 }
 
-async function runOCRProcess(itemId) {
-    const itemState = activeImages[itemId];
-    if (!itemState) return;
+function runOCRProcess(itemId) {
+    return new Promise((resolve) => {
+        const itemState = activeImages[itemId];
+        if (!itemState) {
+            resolve();
+            return;
+        }
 
-    currentOcrItemId = itemId;
-    itemState.status = 'processing';
-    
-    const itemEl = document.getElementById(itemId);
-    const statusEl = itemEl.querySelector('.image-item-status');
-    statusEl.className = 'image-item-status status-loading';
-    statusEl.innerHTML = '<span class="spinner"></span>Đang tối ưu ảnh...';
+        currentOcrItemId = itemId;
+        itemState.status = 'processing';
+        
+        const itemEl = document.getElementById(itemId);
+        const statusEl = itemEl.querySelector('.image-item-status');
+        statusEl.className = 'image-item-status status-loading';
+        statusEl.innerHTML = '<span class="spinner"></span>Đang tối ưu ảnh...';
 
-    // Load file as Image element to draw on canvas
-    const imgElement = new Image();
-    
-    imgElement.onload = async () => {
-        try {
-            // 1. Preprocess image on canvas (Rotation + Grayscale + Contrast Enhancement + Sharpening)
-            statusEl.innerHTML = '<span class="spinner"></span>Tăng nét, xoay ảnh...';
-            const preprocessedCanvas = preprocessImageCanvas(imgElement, itemState.rotation);
-            
-            // 2. Save preprocessed image to backend (so it can be previewed in UI modal)
-            statusEl.innerHTML = '<span class="spinner"></span>Đang lưu ảnh tối ưu...';
-            const blob = await canvasToBlob(preprocessedCanvas, 'image/jpeg', 0.85);
-            const uploadResult = await uploadPreprocessedImage(blob, itemState.originalFilename);
-            itemState.preprocessedUrl = uploadResult.preprocessed_url;
-            
-            // Update preview thumbnail in sidebar
-            const thumbEl = itemEl.querySelector('.image-item-thumbnail');
-            thumbEl.src = itemState.preprocessedUrl;
+        // Load file as Image element to draw on canvas
+        const imgElement = new Image();
+        
+        imgElement.onload = async () => {
+            try {
+                // 1. Preprocess image on canvas (Rotation + Grayscale + Contrast Enhancement + Sharpening)
+                statusEl.innerHTML = '<span class="spinner"></span>Tăng nét, xoay ảnh...';
+                const preprocessedCanvas = preprocessImageCanvas(imgElement, itemState.rotation);
+                
+                // 2. Save preprocessed image to backend (so it can be previewed in UI modal)
+                statusEl.innerHTML = '<span class="spinner"></span>Đang lưu ảnh tối ưu...';
+                const blob = await canvasToBlob(preprocessedCanvas, 'image/jpeg', 0.85);
+                const uploadResult = await uploadPreprocessedImage(blob, itemState.originalFilename);
+                itemState.preprocessedUrl = uploadResult.preprocessed_url;
+                
+                // Update preview thumbnail in sidebar
+                const thumbEl = itemEl.querySelector('.image-item-thumbnail');
+                thumbEl.src = itemState.preprocessedUrl;
 
-            // Update viewer button if it already exists
-            const actionsEl = itemEl.querySelector('.image-item-actions');
-            let viewBtn = actionsEl.querySelector('.btn-view-ocr-image');
-            if (!viewBtn) {
-                viewBtn = document.createElement('button');
-                viewBtn.className = 'action-icon-btn btn-view-ocr-image';
-                viewBtn.title = 'Xem ảnh đã tối ưu';
-                viewBtn.innerHTML = `
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                        <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                `;
-                viewBtn.addEventListener('click', () => {
-                    openImageViewer(itemState.preprocessedUrl, itemState.originalFilename);
-                });
-                actionsEl.insertBefore(viewBtn, actionsEl.firstChild);
-            } else {
-                // Update click handler with new URL
-                viewBtn.onclick = () => openImageViewer(itemState.preprocessedUrl, itemState.originalFilename);
+                // Update viewer button if it already exists
+                const actionsEl = itemEl.querySelector('.image-item-actions');
+                let viewBtn = actionsEl.querySelector('.btn-view-ocr-image');
+                if (!viewBtn) {
+                    viewBtn = document.createElement('button');
+                    viewBtn.className = 'action-icon-btn btn-view-ocr-image';
+                    viewBtn.title = 'Xem ảnh đã tối ưu';
+                    viewBtn.innerHTML = `
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    `;
+                    viewBtn.addEventListener('click', () => {
+                        openImageViewer(itemState.preprocessedUrl, itemState.originalFilename);
+                    });
+                    actionsEl.insertBefore(viewBtn, actionsEl.firstChild);
+                } else {
+                    // Update click handler with new URL
+                    viewBtn.onclick = () => openImageViewer(itemState.preprocessedUrl, itemState.originalFilename);
+                }
+
+                // 3. Run Tesseract.js local OCR on the canvas
+                if (!tesseractWorker) {
+                    statusEl.innerHTML = '<span class="spinner"></span>Đợi tải bộ máy OCR...';
+                    await initTesseract();
+                }
+                
+                statusEl.innerHTML = '<span class="spinner"></span>Nhận dạng: 0%';
+                
+                // Run recognition
+                const { data } = await tesseractWorker.recognize(preprocessedCanvas);
+                
+                // 4. Parse OCR text using regex heuristics
+                statusEl.innerHTML = '<span class="spinner"></span>Phân tích dữ liệu...';
+                const parsedData = parseOcrData(data.text);
+                
+                // Save final status
+                itemState.status = 'success';
+                statusEl.className = 'image-item-status status-success';
+                statusEl.innerHTML = 'Thành công';
+                
+                // Add/update row in the table
+                addOrUpdateTableRow(parsedData, itemId, itemState.preprocessedUrl, itemState.originalFilename);
+                showToast(`Nhận dạng thành công: ${itemState.originalFilename}`, 'success');
+                resolve();
+            } catch (err) {
+                console.error("Error in OCR pipeline for image:", err);
+                itemState.status = 'error';
+                statusEl.className = 'image-item-status status-error';
+                statusEl.innerHTML = 'Lỗi xử lý';
+                showToast(`Lỗi xử lý ảnh "${itemState.originalFilename}": ${err.message || err}`, 'error');
+                resolve();
             }
-
-            // 3. Run Tesseract.js local OCR on the canvas
-            if (!tesseractWorker) {
-                statusEl.innerHTML = '<span class="spinner"></span>Đợi tải bộ máy OCR...';
-                await initTesseract();
-            }
-            
-            statusEl.innerHTML = '<span class="spinner"></span>Nhận dạng: 0%';
-            
-            // Run recognition
-            const { data } = await tesseractWorker.recognize(preprocessedCanvas);
-            
-            // 4. Parse OCR text using regex heuristics
-            statusEl.innerHTML = '<span class="spinner"></span>Phân tích dữ liệu...';
-            const parsedData = parseOcrData(data.text);
-            
-            // Save final status
-            itemState.status = 'success';
-            statusEl.className = 'image-item-status status-success';
-            statusEl.innerHTML = 'Thành công';
-            
-            // Add/update row in the table
-            addOrUpdateTableRow(parsedData, itemId, itemState.preprocessedUrl, itemState.originalFilename);
-            showToast(`Nhận dạng thành công: ${itemState.originalFilename}`, 'success');
-
-        } catch (err) {
-            console.error("Error in OCR pipeline for image:", err);
+        };
+        
+        imgElement.onerror = () => {
             itemState.status = 'error';
             statusEl.className = 'image-item-status status-error';
-            statusEl.innerHTML = 'Lỗi xử lý';
-            showToast(`Lỗi xử lý ảnh "${itemState.originalFilename}": ${err.message || err}`, 'error');
-        }
-    };
-    
-    imgElement.onerror = () => {
-        itemState.status = 'error';
-        statusEl.className = 'image-item-status status-error';
-        statusEl.innerHTML = 'Lỗi đọc ảnh';
-        showToast(`Không thể đọc file ảnh: ${itemState.originalFilename}`, 'error');
-    };
+            statusEl.innerHTML = 'Lỗi đọc ảnh';
+            showToast(`Không thể đọc file ảnh: ${itemState.originalFilename}`, 'error');
+            resolve();
+        };
 
-    // Set src last to avoid race condition where onload fires before assignment
-    imgElement.src = URL.createObjectURL(itemState.file);
+        // Set src last to avoid race condition where onload fires before assignment
+        imgElement.src = URL.createObjectURL(itemState.file);
+    });
 }
 
 // --- Image Preprocessing (Pure JS Canvas) ---
