@@ -1,3 +1,11 @@
+// Global error logging for easier debugging
+window.onerror = function (message, source, lineno, colno, error) {
+    const errText = `Lỗi JavaScript: ${message}\nTại: ${source}:${lineno}:${colno}`;
+    console.error(errText, error);
+    alert(errText);
+    return false;
+};
+
 // State Management
 let activeImages = {}; // stores metadata for each image item: file, rotation, canvas, status
 let tesseractWorker = null;
