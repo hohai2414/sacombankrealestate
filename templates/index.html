@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sacombank Estate - LandOCR Trích xuất dữ liệu Giấy chứng nhận</title>
+    <meta name="description" content="Hệ thống tự động đọc, tiền xử lý và trích xuất thông tin từ ảnh chụp Sổ đỏ, Sổ hồng Việt Nam sử dụng trí tuệ nhân tạo OCR theo chuẩn thiết kế Sacombank Estate.">
+    <!-- Google Fonts Preload -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-container">
+            <div class="logo">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Sacombank inspired logo shape: solid blue with golden touch -->
+                    <path d="M12 2L2 9L12 16L22 9L12 2Z" fill="#0065a4"/>
+                    <path d="M2 17L12 22L22 17" stroke="#D7A44C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M2 13L12 18L22 13" stroke="#00AEEF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>Sacombank <strong>Estate OCR</strong></span>
+            </div>
+            <div class="header-tagline">Công cụ Số hóa & Trích xuất dữ liệu Bất động sản</div>
+            <div class="theme-toggle" id="theme-toggle-btn" title="Chuyển chế độ giao diện">
+                <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+            </div>
+        </div>
+    </header>
+
+    <main class="app-content">
+        <section class="workspace-grid">
+            <!-- Sidebar: Upload & Image Gallery -->
+            <div class="sidebar-panel">
+                <div class="panel-header">
+                    <h2>Tải ảnh tài liệu</h2>
+                    <p class="panel-subtitle">Hỗ trợ nhận dạng ảnh Sổ đỏ, Sổ hồng</p>
+                </div>
+                
+                <div class="upload-zone" id="drop-zone">
+                    <input type="file" id="file-input" multiple accept="image/*" class="file-input-hidden">
+                    <div class="upload-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                    </div>
+                    <p class="upload-text">Kéo thả ảnh vào đây hoặc <span>chọn file</span></p>
+                    <span class="upload-hint">JPG, PNG, WEBP. Cho phép chọn nhiều ảnh cùng lúc.</span>
+                </div>
+
+                <div class="panel-header" style="margin-top: 1.75rem;">
+                    <h2>Danh sách ảnh tài liệu</h2>
+                </div>
+                <div class="image-list-container" id="image-list">
+                    <div class="empty-list-state">Chưa có ảnh nào được tải lên</div>
+                </div>
+            </div>
+
+            <!-- Main Panel: Data Editor & Preview -->
+            <div class="main-panel">
+                <div class="panel-header flex-between">
+                    <div class="panel-title-group">
+                        <h1>Bảng dữ liệu trích xuất</h1>
+                        <p class="panel-subtitle">Nhấp đúp vào ô bất kỳ để chỉnh sửa trực tiếp thông tin</p>
+                    </div>
+                    <div class="action-buttons">
+                        <button id="add-row-btn" class="btn btn-secondary">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            Thêm dòng
+                        </button>
+                        <button id="export-btn" class="btn btn-gold">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            Xuất Excel (.xlsx)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="table-card">
+                    <div class="table-responsive">
+                        <table class="data-table" id="results-table">
+                            <thead>
+                                <tr>
+                                    <th width="60">STT</th>
+                                    <th width="200">Chủ sở hữu</th>
+                                    <th width="300">Địa chỉ thửa đất</th>
+                                    <th width="120">Diện tích</th>
+                                    <th width="200">Mục đích sử dụng</th>
+                                    <th width="120" class="text-center">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body">
+                                <tr class="empty-table-row" id="empty-table-row">
+                                    <td colspan="6" class="text-center">
+                                        <div class="empty-table-state">
+                                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                                <line x1="9" y1="9" x2="15" y2="9"></line>
+                                                <line x1="9" y1="13" x2="15" y2="13"></line>
+                                                <line x1="9" y1="17" x2="13" y2="17"></line>
+                                            </svg>
+                                            <p>Chưa có dữ liệu. Vui lòng tải ảnh lên ở bên trái để chạy OCR nhận diện.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="legend-container">
+                    <div class="legend-item">
+                        <span class="legend-color legend-warning"></span>
+                        <span class="legend-label">Dòng có ô màu đỏ/hồng nhạt: Phát hiện nghi ngờ sai sót hoặc thiếu thông tin nhận dạng, cần kiểm tra.</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal for Image Preview -->
+    <div class="modal" id="preview-modal">
+        <div class="modal-backdrop" id="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">Xem chi tiết ảnh OCR</h3>
+                <button class="modal-close" id="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="image-viewer-grid">
+                    <div class="image-container-box">
+                        <div class="box-label">Ảnh sau khi tự động xoay và tối ưu hóa độ nét</div>
+                        <img id="modal-image" src="" alt="OCR Preprocessed view">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.3/dist/tesseract.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
